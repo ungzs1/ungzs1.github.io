@@ -27,7 +27,7 @@ author:
   pronouns         : # example: "she/her"  
   bio              : "PhD Student in Computational Neuroscience"
   location         : "Lyon & Budapest"
-  employer         : "Inserm (FR) & CSNL (HU)"
+  employer         : [Inserm (FR](https://sbri.fr/teams/neurobiology-of-executive-functions/) & [CSNL (HU)](http://golab.wigner.mta.hu/)"
   uri              : # URL
   email            : "ungvarszki.zsombor@gmail.com" 
 
