@@ -82,12 +82,6 @@
 <body>
     <div class="instructions">
         <h2>Context-Dependent Integration Task (Mante et al., 2013)</h2>
-        <p><strong>Instructions:</strong></p>
-        <ul>
-            <li><strong>MOTION Context:</strong> Judge the direction of motion</li>
-            <li><strong>COLOR Context:</strong> Judge the predominant color</li>
-            <li>The context label is shown on the canvas</li>
-        </ul>
     </div>
 
     <canvas id="canvas" width="800" height="600"></canvas>
@@ -103,6 +97,15 @@
     
     <div class="stats">
         <div>Trials: <span id="trials">0</span> | Correct: <span id="correct">0</span> | Accuracy: <span id="accuracy">0%</span></div>
+    </div>
+
+    <div class="instructions">
+        <p><strong>Instructions:</strong></p>
+        <ul>
+            <li><strong>MOTION Context:</strong> Judge the direction of motion</li>
+            <li><strong>COLOR Context:</strong> Judge the predominant color</li>
+            <li>The context label is shown on the canvas</li>
+        </ul>
     </div>
 
     <script>
@@ -413,7 +416,7 @@
                 const motionAbs = Math.abs(state.motionCoherence).toFixed(1);
                 const colorAbs = Math.abs(state.colorCoherence).toFixed(1);
                 document.getElementById('coherenceInfo').textContent = 
-                    `Motion Coherence: ${motionAbs} | Color Coherence: ${colorAbs}`;
+                    `Last trial: Motion Coherence: ${motionAbs} | Color Coherence: ${colorAbs}`;
                 
                 updateStats();
                 
