@@ -412,12 +412,6 @@
                     document.getElementById('phase').style.color = '#f00';
                 }
                 
-                // Show absolute coherences as decimals (no percent), e.g., 0.1
-                const motionAbs = Math.abs(state.motionCoherence).toFixed(1);
-                const colorAbs = Math.abs(state.colorCoherence).toFixed(1);
-                document.getElementById('coherenceInfo').textContent = 
-                    `Last trial: Motion Coherence: ${motionAbs} | Color Coherence: ${colorAbs}`;
-                
                 updateStats();
                 
                 setTimeout(() => {
