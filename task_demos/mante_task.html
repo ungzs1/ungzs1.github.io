@@ -58,7 +58,7 @@
         
         .stats {
             margin-top: 20px;
-            font-size: 14px;
+            font-size: 18px; /* match .info font-size */
             text-align: center;
         }
         
@@ -91,12 +91,12 @@
         <div id="coherenceInfo" class="info-line" style="margin-top: 10px; font-size: 16px;"></div>
     </div>
     
-    <div class="controls">
-        <button id="resetBtn">Reset Stats</button>
-    </div>
-    
     <div class="stats">
         <div>Trials: <span id="trials">0</span> | Correct: <span id="correct">0</span> | Accuracy: <span id="accuracy">0%</span></div>
+    </div>
+    
+    <div class="controls">
+        <button id="resetBtn">Reset Stats</button>
     </div>
 
     <div class="instructions">
