@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Két zuhanó kő</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .container {
+            display: flex;
+            gap: 30px;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .left-panel, .right-panel {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        canvas {
+            border: 2px solid #333;
+            background: #fff;
+        }
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            width: 400px;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        label {
+            font-weight: bold;
+            color: #555;
+        }
+        input[type="range"] {
+            width: 100%;
+        }
+        .buttons {
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background: #4CAF50;
+            color: white;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button.reset {
+            background: #ff9800;
+        }
+        button.reset:hover {
+            background: #e68900;
+        }
+        .time-display {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2196F3;
+            margin-bottom: 10px;
+        }
+        .info {
+            margin-top: 10px;
+            padding: 10px;
+            background: #e3f2fd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Két zuhanó kő</h1>
+    <div class="container">
+        <div class="left-panel">
+            <div class="time-display">Idő: <span id="timeDisplay">0.00</span> s</div>
+            <canvas id="animCanvas" width="400" height="600"></canvas>
+        </div>
+        <div class="right-panel">
+            <h3>Magasság-Idő Grafikon</h3>
+            <canvas id="graphCanvas" width="500" height="600"></canvas>
+        </div>
+    </div>
+    <div class="controls">
+        <div class="control-group">
+            <label>Idő: <span id="timeValue">0.00</span> s</label>
+            <input type="range" id="timeSlider" min="0" max="2" value="0" step="0.01">
+        </div>
+        <div class="control-group">
+            <label>Alacsonyabb kő késleltetése: <span id="delayValue">0.00</span> s</label>
+            <input type="range" id="delaySlider" min="0" max="1" value="0" step="0.01">
+        </div>
+        <div class="buttons">
+            <button id="playPause">Lejátszás</button>
+            <button id="reset" class="reset">Újraindítás</button>
+        </div>
+        <div class="info" id="infoBox">
+            Egy kő 5m-ről, egy másik 10m-ről esik. Állítsd be a késleltetést, hogy egyszerre érjenek földet.
+        </div>
+    </div>
+
+    <script>
+        const animCanvas = document.getElementById('animCanvas');
+        const animCtx = animCanvas.getContext('2d');
+        const graphCanvas = document.getElementById('graphCanvas');
+        const graphCtx = graphCanvas.getContext('2d');
+        
+        const g = 9.8; // gravity
+        let time = 0;
+        let delay = 0; // delay for the higher stone
+        let isPlaying = false;
+        let animationId = null;
+        
+        const timeSlider = document.getElementById('timeSlider');
+        const timeValue = document.getElementById('timeValue');
+        const delaySlider = document.getElementById('delaySlider');
+        const delayValue = document.getElementById('delayValue');
+        const playPauseBtn = document.getElementById('playPause');
+        const resetBtn = document.getElementById('reset');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const infoBox = document.getElementById('infoBox');
+        
+        timeSlider.addEventListener('input', (e) => {
+            time = parseFloat(e.target.value);
+            timeValue.textContent = time.toFixed(2);
+            if (!isPlaying) {
+                drawAnimation();
+                drawGraph();
+            }
+        });
+        
+        delaySlider.addEventListener('input', (e) => {
+            delay = parseFloat(e.target.value);
+            delayValue.textContent = delay.toFixed(2);
+            if (!isPlaying) {
+                drawAnimation();
+                drawGraph();
+            }
+        });
+        
+        playPauseBtn.addEventListener('click', () => {
+            isPlaying = !isPlaying;
+            playPauseBtn.textContent = isPlaying ? 'Szünet' : 'Lejátszás';
+            if (isPlaying) {
+                animate();
+            }
+        });
+        
+        resetBtn.addEventListener('click', reset);
+        
+        function reset() {
+            time = 0;
+            isPlaying = false;
+            playPauseBtn.textContent = 'Lejátszás';
+            timeSlider.value = 0;
+            timeValue.textContent = '0.00';
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+            drawAnimation();
+            drawGraph();
+            infoBox.textContent = 'Egy kő 5m-ről, egy másik 10m-ről esik. Állítsd be a késleltetést, hogy egyszerre érjenek földet.';
+        }
+        
+        function getStonePosition(h0, t, dropDelay) {
+            // Stone starts falling at time = dropDelay
+            if (t < dropDelay) return h0;
+            const effectiveTime = t - dropDelay;
+            const pos = h0 - 0.5 * g * effectiveTime * effectiveTime;
+            return Math.max(0, pos); // Can't go below ground
+        }
+        
+        function drawAnimation() {
+            animCtx.clearRect(0, 0, animCanvas.width, animCanvas.height);
+            
+            // Draw coordinate system
+            animCtx.strokeStyle = '#ccc';
+            animCtx.lineWidth = 1;
+            
+            // Vertical axis
+            animCtx.beginPath();
+            animCtx.moveTo(50, 50);
+            animCtx.lineTo(50, 550);
+            animCtx.stroke();
+            
+            // Ground level
+            const scale = 500 / 11; // pixels per meter (500 pixels for 11m range)
+            const groundY = 550; // ground at y=0 on canvas
+            
+            // Draw ground
+            animCtx.fillStyle = '#8B4513';
+            animCtx.fillRect(40, groundY, 320, 10);
+            animCtx.fillStyle = '#000';
+            animCtx.textAlign = 'center';
+            animCtx.font = '12px Arial';
+            animCtx.fillText('Föld', 200, groundY + 25);
+            
+            // Y-axis labels
+            animCtx.fillStyle = '#666';
+            animCtx.font = '12px Arial';
+            animCtx.textAlign = 'right';
+            for (let i = 0; i <= 11; i += 1) {
+                const y = groundY - i * scale;
+                if (y > 50 && y < 550) {
+                    animCtx.fillText(i + 'm', 45, y + 4);
+                }
+            }
+            
+            // Y-axis label
+            animCtx.save();
+            animCtx.translate(15, 300);
+            animCtx.rotate(-Math.PI / 2);
+            animCtx.fillStyle = '#000';
+            animCtx.font = '14px Arial';
+            animCtx.textAlign = 'center';
+            animCtx.fillText('Magasság (m)', 0, 0);
+            animCtx.restore();
+            
+            // Get positions
+            const stone1Y = getStonePosition(5, time, delay);
+            const stone2Y = getStonePosition(10, time, 0);
+            
+            // Draw stone 1 (5m) as dot
+            const stone1CanvasY = groundY - stone1Y * scale;
+            if (stone1CanvasY > 50 && stone1CanvasY < 580) {
+                animCtx.fillStyle = '#ff5722';
+                animCtx.beginPath();
+                animCtx.arc(200, stone1CanvasY, 10, 0, Math.PI * 2);
+                animCtx.fill();
+                
+                // Stone 1 label
+                animCtx.fillStyle = '#ff5722';
+                animCtx.textAlign = 'left';
+                animCtx.font = '12px Arial';
+                animCtx.fillText('Kő 1 (5m)', 220, stone1CanvasY + 4);
+            }
+            
+            // Draw stone 2 (10m) as dot
+            const stone2CanvasY = groundY - stone2Y * scale;
+            if (stone2CanvasY > 50 && stone2CanvasY < 580) {
+                animCtx.fillStyle = '#9C27B0';
+                animCtx.strokeStyle = '#7B1FA2';
+                animCtx.lineWidth = 2;
+                animCtx.beginPath();
+                animCtx.arc(200, stone2CanvasY, 10, 0, Math.PI * 2);
+                animCtx.fill();
+                animCtx.stroke();
+                
+                // Stone 2 label
+                animCtx.fillStyle = '#9C27B0';
+                animCtx.textAlign = 'left';
+                animCtx.font = '12px Arial';
+                animCtx.fillText('Kő 2 (10m)', 220, stone2CanvasY + 4);
+            }
+            
+            // Check if they land at the same time
+            const time1WithDelay = delay + Math.sqrt(2 * 5 / g);
+            const time2 = Math.sqrt(2 * 10 / g);
+            const timeDiff = Math.abs(time1WithDelay - time2);
+            
+            if (stone1Y <= 0.1 && stone2Y <= 0.1 && time > 0.3 && timeDiff < 0.05) {
+                animCtx.fillStyle = '#4CAF50';
+                animCtx.font = 'bold 18px Arial';
+                animCtx.textAlign = 'center';
+                animCtx.fillText('EGYSZERRE ÉRTEK FÖLDET!', 200, 100);
+                infoBox.textContent = `Tökéletes! A kövek egyszerre értek földet ${time.toFixed(2)}s-nál.`;
+            }
+            
+            // Position information display
+            animCtx.fillStyle = '#000';
+            animCtx.font = 'bold 14px Arial';
+            animCtx.textAlign = 'left';
+            animCtx.fillText(`Idő: ${time.toFixed(2)} s`, 60, 80);
+            animCtx.fillStyle = '#ff5722';
+            animCtx.fillText(`Kő 1: ${stone1Y.toFixed(2)} m`, 60, 100);
+            animCtx.fillStyle = '#9C27B0';
+            animCtx.fillText(`Kő 2: ${stone2Y.toFixed(2)} m`, 60, 120);
+            
+            timeDisplay.textContent = time.toFixed(2);
+            timeValue.textContent = time.toFixed(2);
+            timeSlider.value = time;
+        }
+        
+        function drawGraph() {
+            graphCtx.clearRect(0, 0, graphCanvas.width, graphCanvas.height);
+            
+            // Draw axes
+            graphCtx.strokeStyle = '#000';
+            graphCtx.lineWidth = 2;
+            
+            const graphScale = 40; // pixels per meter
+            const graphGroundY = 500; // ground position on graph
+            
+            // Time axis (horizontal)
+            graphCtx.beginPath();
+            graphCtx.moveTo(50, graphGroundY);
+            graphCtx.lineTo(480, graphGroundY);
+            graphCtx.stroke();
+            
+            // Height axis (vertical)
+            graphCtx.beginPath();
+            graphCtx.moveTo(90, 50);
+            graphCtx.lineTo(90, 550);
+            graphCtx.stroke();
+            
+            // Labels
+            graphCtx.fillStyle = '#000';
+            graphCtx.font = '14px Arial';
+            graphCtx.textAlign = 'center';
+            graphCtx.fillText('Eltelt idő (s)', 265, 585);
+            
+            graphCtx.save();
+            graphCtx.translate(15, 300);
+            graphCtx.rotate(-Math.PI / 2);
+            graphCtx.fillText('Magasság (m)', 0, 0);
+            graphCtx.restore();
+            
+            // Grid and labels
+            graphCtx.strokeStyle = '#ddd';
+            graphCtx.lineWidth = 1;
+            graphCtx.font = '11px Arial';
+            
+            // Time grid (from 0 to 2)
+            for (let t = 0; t <= 2; t += 0.2) {
+                const x = 90 + t * 195;
+                graphCtx.beginPath();
+                graphCtx.moveTo(x, 50);
+                graphCtx.lineTo(x, 550);
+                graphCtx.stroke();
+                graphCtx.fillStyle = '#666';
+                graphCtx.textAlign = 'center';
+                graphCtx.fillText(t.toFixed(1), x, 515);
+            }
+            
+            // Height grid (0 to 11m)
+            for (let h = 0; h <= 11; h += 1) {
+                const y = graphGroundY - h * graphScale;
+                if (y >= 50 && y <= 550) {
+                    graphCtx.strokeStyle = '#ddd';
+                    graphCtx.lineWidth = 1;
+                    graphCtx.beginPath();
+                    graphCtx.moveTo(90, y);
+                    graphCtx.lineTo(480, y);
+                    graphCtx.stroke();
+                    graphCtx.fillStyle = '#666';
+                    graphCtx.font = '11px Arial';
+                    graphCtx.textAlign = 'right';
+                    graphCtx.fillText(h.toString(), 85, y + 4);
+                }
+            }
+            
+            // Draw stone 1 trajectory (5m)
+            graphCtx.strokeStyle = '#ff5722';
+            graphCtx.lineWidth = 3;
+            graphCtx.beginPath();
+            let started = false;
+            for (let t = 0; t <= Math.min(time, 2); t += 0.01) {
+                const h = getStonePosition(5, t, delay);
+                const x = 90 + t * 195;
+                const canvasY = graphGroundY - h * graphScale;
+                if (!started) {
+                    graphCtx.moveTo(x, canvasY);
+                    started = true;
+                } else {
+                    graphCtx.lineTo(x, canvasY);
+                }
+            }
+            graphCtx.stroke();
+            
+            // Draw stone 2 trajectory (10m)
+            graphCtx.strokeStyle = '#9C27B0';
+            graphCtx.lineWidth = 3;
+            graphCtx.beginPath();
+            started = false;
+            for (let t = 0; t <= Math.min(time, 2); t += 0.01) {
+                const h = getStonePosition(10, t, 0);
+                const x = 90 + t * 195;
+                const canvasY = graphGroundY - h * graphScale;
+                if (!started) {
+                    graphCtx.moveTo(x, canvasY);
+                    started = true;
+                } else {
+                    graphCtx.lineTo(x, canvasY);
+                }
+            }
+            graphCtx.stroke();
+            
+            // Current time marker
+            const currentX = 90 + time * 195;
+            graphCtx.strokeStyle = '#4CAF50';
+            graphCtx.lineWidth = 2;
+            graphCtx.setLineDash([5, 5]);
+            graphCtx.beginPath();
+            graphCtx.moveTo(currentX, 50);
+            graphCtx.lineTo(currentX, 550);
+            graphCtx.stroke();
+            graphCtx.setLineDash([]);
+            
+            // Legend
+            graphCtx.fillStyle = '#ff5722';
+            graphCtx.fillRect(360, 70, 30, 4);
+            graphCtx.fillStyle = '#000';
+            graphCtx.textAlign = 'left';
+            graphCtx.font = '12px Arial';
+            graphCtx.fillText('Kő 1 (5m)', 395, 74);
+            
+            graphCtx.fillStyle = '#9C27B0';
+            graphCtx.fillRect(360, 90, 30, 4);
+            graphCtx.fillStyle = '#000';
+            graphCtx.fillText('Kő 2 (10m)', 395, 94);
+            
+            // Current position markers on graph
+            const currentStone1Pos = getStonePosition(5, time, delay);
+            const currentStone2Pos = getStonePosition(10, time, 0);
+            const stone1Y = graphGroundY - currentStone1Pos * graphScale;
+            const stone2Y = graphGroundY - currentStone2Pos * graphScale;
+            
+            graphCtx.fillStyle = '#ff5722';
+            graphCtx.beginPath();
+            graphCtx.arc(currentX, stone1Y, 5, 0, Math.PI * 2);
+            graphCtx.fill();
+            
+            graphCtx.fillStyle = '#9C27B0';
+            graphCtx.strokeStyle = '#7B1FA2';
+            graphCtx.lineWidth = 1;
+            graphCtx.beginPath();
+            graphCtx.arc(currentX, stone2Y, 5, 0, Math.PI * 2);
+            graphCtx.fill();
+            graphCtx.stroke();
+        }
+        
+        function animate() {
+            if (!isPlaying) return;
+            
+            time += 0.02;
+            
+            if (time > 2) {
+                time = 2;
+                isPlaying = false;
+                playPauseBtn.textContent = 'Lejátszás';
+                return;
+            }
+            
+            drawAnimation();
+            drawGraph();
+            
+            animationId = requestAnimationFrame(animate);
+        }
+        
+        // Initial draw
+        reset();
+    </script>
+</body>
+</html>

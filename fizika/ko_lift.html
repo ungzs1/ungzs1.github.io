@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lift és zuhanó kő</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .container {
+            display: flex;
+            gap: 30px;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .left-panel, .right-panel {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        canvas {
+            border: 2px solid #333;
+            background: #fff;
+        }
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            width: 400px;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        label {
+            font-weight: bold;
+            color: #555;
+        }
+        input[type="range"] {
+            width: 100%;
+        }
+        .buttons {
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background: #4CAF50;
+            color: white;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button.reset {
+            background: #ff9800;
+        }
+        button.reset:hover {
+            background: #e68900;
+        }
+        .time-display {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2196F3;
+            margin-bottom: 10px;
+        }
+        .info {
+            margin-top: 10px;
+            padding: 10px;
+            background: #e3f2fd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Lift és zuhanó kő</h1>
+    <div class="container">
+        <div class="left-panel">
+            <div class="time-display">Idő: <span id="timeDisplay">-1.00</span> s</div>
+            <canvas id="animCanvas" width="400" height="600"></canvas>
+        </div>
+        <div class="right-panel">
+            <h3>Pozíció-Idő Grafikon</h3>
+            <canvas id="graphCanvas" width="500" height="600"></canvas>
+        </div>
+    </div>
+    <div class="controls">
+        <div class="control-group">
+            <label>Idő: <span id="timeValue">-1.00</span> s</label>
+            <input type="range" id="timeSlider" min="-1" max="5" value="-1" step="0.1">
+        </div>
+        <div class="control-group">
+            <label>Gravitáció: <span id="gravityValue">9.8</span> m/s²</label>
+            <input type="range" id="gravitySlider" min="1" max="100" value="9.8" step="0.1">
+        </div>
+        <div class="buttons">
+            <button id="playPause">Lejátszás</button>
+            <button id="reset" class="reset">Újraindítás</button>
+        </div>
+        <div class="info" id="infoBox">
+            t=0-nál a lift elhalad melletted (0 pozíció) és elejtod a követ. Használd a csúszkát különböző időpontok felfedezéséhez.
+        </div>
+    </div>
+
+    <script>
+        const animCanvas = document.getElementById('animCanvas');
+        const animCtx = animCanvas.getContext('2d');
+        const graphCanvas = document.getElementById('graphCanvas');
+        const graphCtx = graphCanvas.getContext('2d');
+        
+        let g = 9.8; // gravity
+        const elevatorSpeed = 14.7; // m/s
+        let time = -1;
+        let isPlaying = false;
+        let animationId = null;
+        let trajectoryPoints = { elevator: [], stone: [] };
+        
+        const timeSlider = document.getElementById('timeSlider');
+        const timeValue = document.getElementById('timeValue');
+        const gravitySlider = document.getElementById('gravitySlider');
+        const gravityValue = document.getElementById('gravityValue');
+        const playPauseBtn = document.getElementById('playPause');
+        const resetBtn = document.getElementById('reset');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const infoBox = document.getElementById('infoBox');
+        
+        timeSlider.addEventListener('input', (e) => {
+            time = parseFloat(e.target.value);
+            timeValue.textContent = time.toFixed(2);
+            if (!isPlaying) {
+                updateTrajectory();
+                drawAnimation();
+                drawGraph();
+            }
+        });
+        
+        gravitySlider.addEventListener('input', (e) => {
+            g = parseFloat(e.target.value);
+            gravityValue.textContent = g.toFixed(1);
+            if (!isPlaying) {
+                updateTrajectory();
+                drawAnimation();
+                drawGraph();
+            }
+        });
+        
+        playPauseBtn.addEventListener('click', () => {
+            isPlaying = !isPlaying;
+            playPauseBtn.textContent = isPlaying ? 'Szünet' : 'Lejátszás';
+            if (isPlaying) {
+                animate();
+            }
+        });
+        
+        resetBtn.addEventListener('click', reset);
+        
+        function reset() {
+            time = -1;
+            isPlaying = false;
+            playPauseBtn.textContent = 'Lejátszás';
+            timeSlider.value = -1;
+            timeValue.textContent = '-1.00';
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+            updateTrajectory();
+            drawAnimation();
+            drawGraph();
+            infoBox.textContent = 't=0-nál a lift elhalad melletted (0 pozíció) és elejtod a követ. Használd a csúszkát különböző időpontok felfedezéséhez.';
+        }
+        
+        function getElevatorPosition(t) {
+            // At t=0, elevator is at position 0
+            // Elevator descends at 14.7 m/s
+            return -elevatorSpeed * t;
+        }
+        
+        function getStonePosition(t) {
+            // Stone only falls when t >= 0
+            if (t < 0) return 0;
+            // Free fall from position 0
+            return -0.5 * g * t * t;
+        }
+        
+        function updateTrajectory() {
+            trajectoryPoints = { elevator: [], stone: [] };
+            for (let t = -1; t <= time; t += 0.05) {
+                trajectoryPoints.elevator.push({ t: t, y: getElevatorPosition(t) });
+                if (t >= 0) {
+                    trajectoryPoints.stone.push({ t: t, y: getStonePosition(t) });
+                }
+            }
+        }
+        
+        function drawAnimation() {
+            animCtx.clearRect(0, 0, animCanvas.width, animCanvas.height);
+            
+            // Draw coordinate system
+            animCtx.strokeStyle = '#ccc';
+            animCtx.lineWidth = 1;
+            
+            // Vertical axis
+            animCtx.beginPath();
+            animCtx.moveTo(50, 50);
+            animCtx.lineTo(50, 550);
+            animCtx.stroke();
+            
+            // Horizontal axis at y=0
+            const scale = 500 / 140; // pixels per meter (500 pixels for 140m range: from -120 to +20)
+            const zeroY = 50 + 20 * scale; // y=0 position on canvas (20m from top)
+            animCtx.strokeStyle = '#000';
+            animCtx.lineWidth = 2;
+            animCtx.beginPath();
+            animCtx.moveTo(40, zeroY);
+            animCtx.lineTo(360, zeroY);
+            animCtx.stroke();
+            
+            // Y-axis labels
+            animCtx.fillStyle = '#666';
+            animCtx.font = '12px Arial';
+            animCtx.textAlign = 'right';
+            for (let i = -120; i <= 20; i += 20) {
+                const y = zeroY - i * scale;
+                if (y > 50 && y < 550) {
+                    animCtx.fillText(i + 'm', 45, y + 4);
+                }
+            }
+            
+            // Y-axis label
+            animCtx.save();
+            animCtx.translate(15, 300);
+            animCtx.rotate(-Math.PI / 2);
+            animCtx.fillStyle = '#000';
+            animCtx.font = '14px Arial';
+            animCtx.textAlign = 'center';
+            animCtx.fillText('Megtett út (m)', 0, 0);
+            animCtx.restore();
+            
+            // Draw observer (person at y=0)
+            animCtx.fillStyle = '#333';
+            animCtx.beginPath();
+            animCtx.arc(200, zeroY, 8, 0, Math.PI * 2);
+            animCtx.fill();
+            animCtx.fillStyle = '#000';
+            animCtx.textAlign = 'center';
+            animCtx.fillText('Te (Megfigyelő)', 200, zeroY + 25);
+            
+            // Get positions
+            const elevatorY = getElevatorPosition(time);
+            const stoneY = getStonePosition(time);
+            
+            // Draw elevator as dot
+            const elevatorCanvasY = zeroY - elevatorY * scale;
+            if (elevatorCanvasY > 20 && elevatorCanvasY < 580 && elevatorY <= 20) {
+                animCtx.fillStyle = '#2196F3';
+                animCtx.beginPath();
+                animCtx.arc(200, elevatorCanvasY, 10, 0, Math.PI * 2);
+                animCtx.fill();
+                
+                // Elevator label
+                animCtx.fillStyle = '#2196F3';
+                animCtx.textAlign = 'left';
+                animCtx.font = '12px Arial';
+                animCtx.fillText('Lift', 220, elevatorCanvasY + 4);
+            }
+            
+            // Draw stone as dot
+            const stoneCanvasY = zeroY - stoneY * scale;
+            if (stoneCanvasY > 20 && stoneCanvasY < 580 && stoneY <= 20) {
+                animCtx.fillStyle = '#ff5722';
+                animCtx.beginPath();
+                animCtx.arc(200, stoneCanvasY, 10, 0, Math.PI * 2);
+                animCtx.fill();
+                
+                // Stone label
+                animCtx.fillStyle = '#ff5722';
+                animCtx.textAlign = 'left';
+                animCtx.font = '12px Arial';
+                animCtx.fillText('Kő', 220, stoneCanvasY + 4);
+                
+                // Check if they meet (only after stone is dropped)
+                if (time >= 0 && Math.abs(elevatorY - stoneY) < 2 && time > 0) {
+                    animCtx.fillStyle = '#4CAF50';
+                    animCtx.font = 'bold 18px Arial';
+                    animCtx.textAlign = 'center';
+                    animCtx.fillText('TALÁLKOZNAK!', 200, 170);
+                    infoBox.textContent = `Találkoznak t = ${time.toFixed(2)}s-nál, pozíció = ${elevatorY.toFixed(1)}m`;
+                }
+            }
+            
+            // Position information display
+            animCtx.fillStyle = '#000';
+            animCtx.font = 'bold 14px Arial';
+            animCtx.textAlign = 'left';
+            animCtx.fillText(`Idő: ${time.toFixed(2)} s`, 60, 80);
+            animCtx.fillStyle = '#2196F3';
+            animCtx.fillText(`Lift: ${elevatorY.toFixed(1)} m`, 60, 100);
+            animCtx.fillStyle = '#ff5722';
+            animCtx.fillText(`Kő: ${stoneY.toFixed(1)} m`, 60, 120);
+            
+            // Time indicator
+            if (time < 0) {
+                animCtx.fillStyle = '#ff9800';
+                animCtx.font = '14px Arial';
+                animCtx.textAlign = 'center';
+                animCtx.fillText('A kő még nincs elejtve', 200, 170);
+            }
+            
+            timeDisplay.textContent = time.toFixed(2);
+            timeValue.textContent = time.toFixed(2);
+            timeSlider.value = time;
+        }
+        
+        function drawGraph() {
+            graphCtx.clearRect(0, 0, graphCanvas.width, graphCanvas.height);
+            
+            // Draw axes
+            graphCtx.strokeStyle = '#000';
+            graphCtx.lineWidth = 2;
+            
+            // Calculate scale and zero position for graph
+            const graphScale = 500 / 140; // pixels per meter (500 pixels for 140m range: from -120 to +20)
+            const graphZeroY = 50 + 20 * graphScale; // y=0 position on canvas (20m from top)
+            
+            // Time axis (horizontal)
+            graphCtx.beginPath();
+            graphCtx.moveTo(50, graphZeroY);
+            graphCtx.lineTo(480, graphZeroY);
+            graphCtx.stroke();
+            
+            // Position axis (vertical)
+            graphCtx.beginPath();
+            graphCtx.moveTo(90, 50);
+            graphCtx.lineTo(90, 550);
+            graphCtx.stroke();
+            
+            // Labels
+            graphCtx.fillStyle = '#000';
+            graphCtx.font = '14px Arial';
+            graphCtx.textAlign = 'center';
+            graphCtx.fillText('Eltelt idő (t)', 265, 585);
+            
+            graphCtx.save();
+            graphCtx.translate(15, 300);
+            graphCtx.rotate(-Math.PI / 2);
+            graphCtx.fillText('Megtett út (m)', 0, 0);
+            graphCtx.restore();
+            
+            // Grid and labels
+            graphCtx.strokeStyle = '#ddd';
+            graphCtx.lineWidth = 1;
+            graphCtx.font = '11px Arial';
+            
+            // Time grid (from -1 to 5)
+            for (let t = -1; t <= 5; t += 1) {
+                const x = 90 + (t + 1) * 65;
+                graphCtx.beginPath();
+                graphCtx.moveTo(x, 50);
+                graphCtx.lineTo(x, 550);
+                graphCtx.stroke();
+                graphCtx.fillStyle = '#666';
+                graphCtx.textAlign = 'center';
+                graphCtx.fillText(t.toString(), x, graphZeroY + 15);
+            }
+            
+            // Highlight t=0
+            graphCtx.strokeStyle = '#ff9800';
+            graphCtx.lineWidth = 2;
+            const zeroX = 90 + 65;
+            graphCtx.beginPath();
+            graphCtx.moveTo(zeroX, 50);
+            graphCtx.lineTo(zeroX, 550);
+            graphCtx.stroke();
+            graphCtx.fillStyle = '#ff9800';
+            graphCtx.font = 'bold 11px Arial';
+            graphCtx.fillText('t=0', zeroX, graphZeroY + 30);
+            
+            // Position grid
+            for (let p = -120; p <= 20; p += 20) {
+                const y = graphZeroY - p * graphScale;
+                if (y >= 50 && y <= 550) {
+                    graphCtx.strokeStyle = '#ddd';
+                    graphCtx.lineWidth = 1;
+                    graphCtx.beginPath();
+                    graphCtx.moveTo(90, y);
+                    graphCtx.lineTo(480, y);
+                    graphCtx.stroke();
+                    graphCtx.fillStyle = '#666';
+                    graphCtx.font = '11px Arial';
+                    graphCtx.textAlign = 'right';
+                    graphCtx.fillText(p.toString(), 85, y + 4);
+                }
+            }
+            
+            // Draw elevator trajectory
+            graphCtx.strokeStyle = '#2196F3';
+            graphCtx.lineWidth = 3;
+            graphCtx.beginPath();
+            let started = false;
+            for (let t = -1; t <= Math.min(time, 5); t += 0.05) {
+                const y = getElevatorPosition(t);
+                const x = 90 + (t + 1) * 65;
+                const canvasY = graphZeroY - y * graphScale;
+                if (!started) {
+                    graphCtx.moveTo(x, canvasY);
+                    started = true;
+                } else {
+                    graphCtx.lineTo(x, canvasY);
+                }
+            }
+            graphCtx.stroke();
+            
+            // Draw stone trajectory (for all times, showing position at y=0 before drop)
+            graphCtx.strokeStyle = '#ff5722';
+            graphCtx.lineWidth = 3;
+            graphCtx.beginPath();
+            started = false;
+            for (let t = -1; t <= Math.min(time, 5); t += 0.05) {
+                const y = getStonePosition(t);
+                const x = 90 + (t + 1) * 65;
+                const canvasY = graphZeroY - y * graphScale;
+                if (!started) {
+                    graphCtx.moveTo(x, canvasY);
+                    started = true;
+                } else {
+                    graphCtx.lineTo(x, canvasY);
+                }
+            }
+            graphCtx.stroke();
+            
+            // Current time marker
+            const currentX = 90 + (time + 1) * 65;
+            graphCtx.strokeStyle = '#4CAF50';
+            graphCtx.lineWidth = 2;
+            graphCtx.setLineDash([5, 5]);
+            graphCtx.beginPath();
+            graphCtx.moveTo(currentX, 50);
+            graphCtx.lineTo(currentX, 550);
+            graphCtx.stroke();
+            graphCtx.setLineDash([]);
+            
+            // Legend
+            graphCtx.fillStyle = '#2196F3';
+            graphCtx.fillRect(360, 70, 30, 4);
+            graphCtx.fillStyle = '#000';
+            graphCtx.textAlign = 'left';
+            graphCtx.font = '12px Arial';
+            graphCtx.fillText('Lift', 395, 74);
+            
+            graphCtx.fillStyle = '#ff5722';
+            graphCtx.fillRect(360, 90, 30, 4);
+            graphCtx.fillStyle = '#000';
+            graphCtx.fillText('Kő', 395, 94);
+        }
+        
+        function animate() {
+            if (!isPlaying) return;
+            
+            time += 0.05;
+            
+            if (time > 5) {
+                time = 5;
+                isPlaying = false;
+                playPauseBtn.textContent = 'Lejátszás';
+                return;
+            }
+            
+            updateTrajectory();
+            drawAnimation();
+            drawGraph();
+            
+            animationId = requestAnimationFrame(animate);
+        }
+        
+        // Initial draw
+        reset();
+    </script>
+</body>
+</html>

@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kutya üldözi a nyulat</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .container {
+            display: flex;
+            gap: 30px;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .left-panel, .right-panel {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        canvas {
+            border: 2px solid #333;
+            background: #fff;
+        }
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            width: 400px;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        label {
+            font-weight: bold;
+            color: #555;
+        }
+        input[type="range"] {
+            width: 100%;
+        }
+        .buttons {
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background: #4CAF50;
+            color: white;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button.reset {
+            background: #ff9800;
+        }
+        button.reset:hover {
+            background: #e68900;
+        }
+        .time-display {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2196F3;
+            margin-bottom: 10px;
+        }
+        .info {
+            margin-top: 10px;
+            padding: 10px;
+            background: #e3f2fd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Kutya üldözi a nyulat</h1>
+    <div class="container">
+        <div class="left-panel">
+            <div class="time-display">Idő: <span id="timeDisplay">0.00</span> s</div>
+            <canvas id="animCanvas" width="400" height="600"></canvas>
+        </div>
+        <div class="right-panel">
+            <h3>Pozíció-Idő Grafikon</h3>
+            <canvas id="graphCanvas" width="500" height="600"></canvas>
+        </div>
+    </div>
+    <div class="controls">
+        <div class="control-group">
+            <label>Idő: <span id="timeValue">0.00</span> s</label>
+            <input type="range" id="timeSlider" min="0" max="15" value="0" step="0.1">
+        </div>
+        <div class="control-group">
+            <label>Kutya sebessége: <span id="dogSpeedValue">20.0</span> m/s</label>
+            <input type="range" id="dogSpeedSlider" min="10" max="30" value="20" step="0.5">
+        </div>
+        <div class="buttons">
+            <button id="playPause">Lejátszás</button>
+            <button id="reset" class="reset">Újraindítás</button>
+        </div>
+        <div class="info" id="infoBox">
+            A nyúlnak 70m előnye van. A kutya 20 m/s sebességgel, a nyúl 15 m/s sebességgel fut. Használd a csúszkát különböző időpontok felfedezéséhez.
+        </div>
+    </div>
+
+    <script>
+        const animCanvas = document.getElementById('animCanvas');
+        const animCtx = animCanvas.getContext('2d');
+        const graphCanvas = document.getElementById('graphCanvas');
+        const graphCtx = graphCanvas.getContext('2d');
+        
+        const rabbitSpeed = 15; // m/s
+        let dogSpeed = 20; // m/s
+        const headstart = 70; // m
+        let time = 0;
+        let isPlaying = false;
+        let animationId = null;
+        let trajectoryPoints = { dog: [], rabbit: [], distance: [] };
+        
+        const timeSlider = document.getElementById('timeSlider');
+        const timeValue = document.getElementById('timeValue');
+        const dogSpeedSlider = document.getElementById('dogSpeedSlider');
+        const dogSpeedValue = document.getElementById('dogSpeedValue');
+        const playPauseBtn = document.getElementById('playPause');
+        const resetBtn = document.getElementById('reset');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const infoBox = document.getElementById('infoBox');
+        
+        timeSlider.addEventListener('input', (e) => {
+            time = parseFloat(e.target.value);
+            timeValue.textContent = time.toFixed(2);
+            if (!isPlaying) {
+                updateTrajectory();
+                drawAnimation();
+                drawGraph();
+            }
+        });
+        
+        dogSpeedSlider.addEventListener('input', (e) => {
+            dogSpeed = parseFloat(e.target.value);
+            dogSpeedValue.textContent = dogSpeed.toFixed(1);
+            if (!isPlaying) {
+                updateTrajectory();
+                drawAnimation();
+                drawGraph();
+            }
+        });
+        
+        playPauseBtn.addEventListener('click', () => {
+            isPlaying = !isPlaying;
+            playPauseBtn.textContent = isPlaying ? 'Szünet' : 'Lejátszás';
+            if (isPlaying) {
+                animate();
+            }
+        });
+        
+        resetBtn.addEventListener('click', reset);
+        
+        function reset() {
+            time = 0;
+            isPlaying = false;
+            playPauseBtn.textContent = 'Lejátszás';
+            timeSlider.value = 0;
+            timeValue.textContent = '0.00';
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+            updateTrajectory();
+            drawAnimation();
+            drawGraph();
+            infoBox.textContent = 'A nyúlnak 70m előnye van. A kutya ' + dogSpeed.toFixed(1) + ' m/s sebességgel, a nyúl 15 m/s sebességgel fut. Használd a csúszkát különböző időpontok felfedezéséhez.';
+        }
+        
+        function getDogPosition(t) {
+            return dogSpeed * t;
+        }
+        
+        function getRabbitPosition(t) {
+            return headstart + rabbitSpeed * t;
+        }
+        
+        function getDistance(t) {
+            return Math.abs(getRabbitPosition(t) - getDogPosition(t));
+        }
+        
+        function updateTrajectory() {
+            trajectoryPoints = { dog: [], rabbit: [], distance: [] };
+            for (let t = 0; t <= time; t += 0.05) {
+                trajectoryPoints.dog.push({ t: t, y: getDogPosition(t) });
+                trajectoryPoints.rabbit.push({ t: t, y: getRabbitPosition(t) });
+                trajectoryPoints.distance.push({ t: t, d: getDistance(t) });
+            }
+        }
+        
+        function drawAnimation() {
+            animCtx.clearRect(0, 0, animCanvas.width, animCanvas.height);
+            
+            // Draw coordinate system
+            animCtx.strokeStyle = '#ccc';
+            animCtx.lineWidth = 1;
+            
+            // Vertical axis
+            animCtx.beginPath();
+            animCtx.moveTo(50, 50);
+            animCtx.lineTo(50, 550);
+            animCtx.stroke();
+            
+            // Horizontal axis at y=0
+            const zeroY = 550; // y=0 position on canvas (bottom)
+            animCtx.strokeStyle = '#000';
+            animCtx.lineWidth = 2;
+            animCtx.beginPath();
+            animCtx.moveTo(40, zeroY);
+            animCtx.lineTo(360, zeroY);
+            animCtx.stroke();
+            
+            // Y-axis labels
+            animCtx.fillStyle = '#666';
+            animCtx.font = '12px Arial';
+            animCtx.textAlign = 'right';
+            for (let i = 0; i <= 350; i += 25) {
+                const y = zeroY - i * 1.4;
+                if (y > 50 && y < 550) {
+                    animCtx.fillText(i + 'm', 45, y + 4);
+                }
+            }
+            
+            // Y-axis label
+            animCtx.save();
+            animCtx.translate(15, 300);
+            animCtx.rotate(-Math.PI / 2);
+            animCtx.fillStyle = '#000';
+            animCtx.font = '14px Arial';
+            animCtx.textAlign = 'center';
+            animCtx.fillText('Megtett táv (m)', 0, 0);
+            animCtx.restore();
+            
+            // Get positions
+            const dogY = getDogPosition(time);
+            const rabbitY = getRabbitPosition(time);
+            const distance = getDistance(time);
+            
+            // Draw dog as dot
+            const dogCanvasY = zeroY - dogY * 1.4;
+            if (dogCanvasY > 50 && dogCanvasY < 580) {
+                animCtx.fillStyle = '#8B4513';
+                animCtx.beginPath();
+                animCtx.arc(200, dogCanvasY, 10, 0, Math.PI * 2);
+                animCtx.fill();
+                
+                // Dog label
+                animCtx.fillStyle = '#8B4513';
+                animCtx.textAlign = 'left';
+                animCtx.font = '12px Arial';
+                animCtx.fillText('Kutya', 220, dogCanvasY + 4);
+            }
+            
+            // Draw rabbit as dot
+            const rabbitCanvasY = zeroY - rabbitY * 1.4;
+            if (rabbitCanvasY > 50 && rabbitCanvasY < 580) {
+                animCtx.fillStyle = '#D3D3D3';
+                animCtx.strokeStyle = '#666';
+                animCtx.lineWidth = 2;
+                animCtx.beginPath();
+                animCtx.arc(200, rabbitCanvasY, 10, 0, Math.PI * 2);
+                animCtx.fill();
+                animCtx.stroke();
+                
+                // Rabbit label
+                animCtx.fillStyle = '#666';
+                animCtx.textAlign = 'left';
+                animCtx.font = '12px Arial';
+                animCtx.fillText('Nyúl', 220, rabbitCanvasY + 4);
+                
+                // Check if dog catches rabbit
+                if (distance <= 1 && time > 0) {
+                    animCtx.fillStyle = '#4CAF50';
+                    animCtx.font = 'bold 18px Arial';
+                    animCtx.textAlign = 'center';
+                    animCtx.fillText('A KUTYA ELKAPTA A NYULAT!', 200, 50);
+                    infoBox.textContent = `A kutya elkapta a nyulat t = ${time.toFixed(2)}s-nál, pozíció = ${dogY.toFixed(1)}m`;
+                }
+            }
+            
+            // Position information display
+            animCtx.fillStyle = '#000';
+            animCtx.font = 'bold 14px Arial';
+            animCtx.textAlign = 'left';
+            animCtx.fillText(`Idő: ${time.toFixed(2)} s`, 60, 80);
+            animCtx.fillStyle = '#8B4513';
+            animCtx.fillText(`Kutya: ${dogY.toFixed(1)} m`, 60, 100);
+            animCtx.fillStyle = '#666';
+            animCtx.fillText(`Nyúl: ${rabbitY.toFixed(1)} m`, 60, 120);
+            
+            timeDisplay.textContent = time.toFixed(2);
+            timeValue.textContent = time.toFixed(2);
+            timeSlider.value = time;
+        }
+        
+        function drawGraph() {
+            graphCtx.clearRect(0, 0, graphCanvas.width, graphCanvas.height);
+            
+            // Draw axes
+            graphCtx.strokeStyle = '#000';
+            graphCtx.lineWidth = 2;
+            
+            // Time axis (horizontal)
+            graphCtx.beginPath();
+            graphCtx.moveTo(50, 500);
+            graphCtx.lineTo(480, 500);
+            graphCtx.stroke();
+            
+            // Position axis (vertical)
+            graphCtx.beginPath();
+            graphCtx.moveTo(90, 50);
+            graphCtx.lineTo(90, 550);
+            graphCtx.stroke();
+            
+            // Labels
+            graphCtx.fillStyle = '#000';
+            graphCtx.font = '14px Arial';
+            graphCtx.textAlign = 'center';
+            graphCtx.fillText('Eltelt idő (t)', 265, 585);
+            
+            graphCtx.save();
+            graphCtx.translate(15, 300);
+            graphCtx.rotate(-Math.PI / 2);
+            graphCtx.fillText('Megtett táv (m)', 0, 0);
+            graphCtx.restore();
+            
+            // Grid and labels
+            graphCtx.strokeStyle = '#ddd';
+            graphCtx.lineWidth = 1;
+            graphCtx.font = '11px Arial';
+            
+            // Time grid (from 0 to 15)
+            for (let t = 0; t <= 15; t += 1) {
+                const x = 90 + t * 26;
+                graphCtx.beginPath();
+                graphCtx.moveTo(x, 50);
+                graphCtx.lineTo(x, 550);
+                graphCtx.stroke();
+                graphCtx.fillStyle = '#666';
+                graphCtx.textAlign = 'center';
+                graphCtx.fillText(t.toString(), x, 515);
+            }
+            
+            // Position grid (0 to 350m)
+            for (let p = 0; p <= 350; p += 25) {
+                const y = 500 - p * 1.28;
+                if (y >= 50 && y <= 550) {
+                    graphCtx.strokeStyle = '#ddd';
+                    graphCtx.lineWidth = 1;
+                    graphCtx.beginPath();
+                    graphCtx.moveTo(90, y);
+                    graphCtx.lineTo(480, y);
+                    graphCtx.stroke();
+                    graphCtx.fillStyle = '#666';
+                    graphCtx.font = '11px Arial';
+                    graphCtx.textAlign = 'right';
+                    graphCtx.fillText(p.toString(), 85, y + 4);
+                }
+            }
+            
+            // Draw dog trajectory
+            graphCtx.strokeStyle = '#8B4513';
+            graphCtx.lineWidth = 3;
+            graphCtx.beginPath();
+            let started = false;
+            for (let t = 0; t <= Math.min(time, 15); t += 0.05) {
+                const pos = getDogPosition(t);
+                const x = 90 + t * 26;
+                const canvasY = 500 - pos * 1.28;
+                if (!started) {
+                    graphCtx.moveTo(x, canvasY);
+                    started = true;
+                } else {
+                    graphCtx.lineTo(x, canvasY);
+                }
+            }
+            graphCtx.stroke();
+            
+            // Draw rabbit trajectory
+            graphCtx.strokeStyle = '#D3D3D3';
+            graphCtx.lineWidth = 3;
+            graphCtx.beginPath();
+            started = false;
+            for (let t = 0; t <= Math.min(time, 15); t += 0.05) {
+                const pos = getRabbitPosition(t);
+                const x = 90 + t * 26;
+                const canvasY = 500 - pos * 1.28;
+                if (!started) {
+                    graphCtx.moveTo(x, canvasY);
+                    started = true;
+                } else {
+                    graphCtx.lineTo(x, canvasY);
+                }
+            }
+            graphCtx.stroke();
+            
+            // Current time marker
+            const currentX = 90 + time * 26;
+            graphCtx.strokeStyle = '#4CAF50';
+            graphCtx.lineWidth = 2;
+            graphCtx.setLineDash([5, 5]);
+            graphCtx.beginPath();
+            graphCtx.moveTo(currentX, 50);
+            graphCtx.lineTo(currentX, 550);
+            graphCtx.stroke();
+            graphCtx.setLineDash([]);
+            
+            // Legend
+            graphCtx.fillStyle = '#8B4513';
+            graphCtx.fillRect(360, 70, 30, 4);
+            graphCtx.fillStyle = '#000';
+            graphCtx.textAlign = 'left';
+            graphCtx.font = '12px Arial';
+            graphCtx.fillText('Kutya', 395, 74);
+            
+            graphCtx.fillStyle = '#D3D3D3';
+            graphCtx.fillRect(360, 90, 30, 4);
+            graphCtx.fillStyle = '#000';
+            graphCtx.fillText('Nyúl', 395, 94);
+            
+            // Current position markers on graph
+            const currentDogPos = getDogPosition(time);
+            const currentRabbitPos = getRabbitPosition(time);
+            const dogY = 500 - currentDogPos * 1.28;
+            const rabbitY = 500 - currentRabbitPos * 1.28;
+            
+            graphCtx.fillStyle = '#8B4513';
+            graphCtx.beginPath();
+            graphCtx.arc(currentX, dogY, 5, 0, Math.PI * 2);
+            graphCtx.fill();
+            
+            graphCtx.fillStyle = '#D3D3D3';
+            graphCtx.strokeStyle = '#000';
+            graphCtx.lineWidth = 1;
+            graphCtx.beginPath();
+            graphCtx.arc(currentX, rabbitY, 5, 0, Math.PI * 2);
+            graphCtx.fill();
+            graphCtx.stroke();
+        }
+        
+        function animate() {
+            if (!isPlaying) return;
+            
+            time += 0.05;
+            
+            if (time > 15) {
+                time = 15;
+                isPlaying = false;
+                playPauseBtn.textContent = 'Lejátszás';
+                return;
+            }
+            
+            updateTrajectory();
+            drawAnimation();
+            drawGraph();
+            
+            animationId = requestAnimationFrame(animate);
+        }
+        
+        // Initial draw
+        reset();
+    </script>
+</body>
+</html>
