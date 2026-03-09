@@ -12,7 +12,7 @@ citation: 'Ungvarszki et al. (2025). &quot;Neural dynamics reveal foraging-like 
 
 Description.....
 
-<object data="{{ '/files/2025.09.29.679289v1.full.pdf' | relative_url }}" type="application/pdf" width="100%" height="900px">
+<object data="{{ '/files/2025.09.29.679289v1.full.pdf' | relative_url }}" type="application/pdf" width="100%" style="height: 100vh;">
 	<p><a href="{{ '/files/2025.09.29.679289v1.full.pdf' | relative_url }}">Open the PDF</a></p>
 </object>
 
