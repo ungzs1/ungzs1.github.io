@@ -85,6 +85,26 @@
       font-size: 1rem; margin-left: 4px; padding: 0;
     }
     #chosen .empty { background: none; color: #8a7764; padding: 6px 0; }
+    #intro {
+      position: fixed; inset: 0;
+      z-index: 200;
+      background: #fdf6ec;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 24px 16px;
+      text-align: center;
+    }
+    #intro.hidden { display: none; }
+    #intro h1 { font-size: 2.2rem; margin: 0 0 20px; }
+    #intro p { font-size: 1.25rem; margin: 0 0 12px; max-width: 520px; }
+    #intro .big { font-size: 1.5rem; font-weight: 700; color: #c47f2c; }
+    #ok {
+      margin-top: 24px;
+      padding: 16px 28px; font-size: 1.3rem; font-weight: 700;
+      border: none; border-radius: 14px; cursor: pointer;
+      background: #3a8a3a; color: #fff;
+      box-shadow: 0 4px 14px rgba(0,0,0,.2);
+    }
     #done {
       margin-top: 12px;
       padding: 14px 32px; font-size: 1.2rem; font-weight: 700;
@@ -140,6 +160,13 @@
   </style>
 </head>
 <body>
+  <div id="intro">
+    <h1>🎉 Szonja és Boti! 🎉</h1>
+    <p class="big">🎁 Ajándékotok egy Szonja és Boti nap velünk!!! 🥳</p>
+    <p>Jópofa programok, nevetés, beszélgetés 😄🎈</p>
+    <button id="ok">😊 🎉 🥳 Oké! 🥳 🎉 😊</button>
+  </div>
+
   <header>
     <h1>🎉🥳 Boti és Szonja nap 🎊🎉</h1>
   </header>
@@ -192,7 +219,7 @@
     const ASKED_BOOST = 3;        // ennyiszer gyorsabb az első kattintás után
 
     let pointer = { x: -9999, y: -9999 };
-    const startTime = performance.now();
+    let startTime = performance.now();
 
     const items = DATES.map((label, i) => {
       const el = document.createElement("div");
@@ -519,6 +546,12 @@
       if (b.yes) result.classList.add("confirmed");
       else result.classList.remove("open");
     }));
+
+    // ---- Intro screen ----
+    document.getElementById("ok").addEventListener("click", () => {
+      document.getElementById("intro").classList.add("hidden");
+      startTime = performance.now();   // speed-up starts now, not while reading the intro
+    });
   </script>
 </body>
 </html>
